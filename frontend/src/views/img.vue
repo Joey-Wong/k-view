@@ -264,17 +264,17 @@ export default {
     async delImgHandle({ path, viewH }, i, index) {
       const [err, res] = await to(
         axios({
-          method: "post",
-          url: `${API_PREFIX}/delImg.json`,
-          data: { path },
+          method: "get",
+          url: `${API_PREFIX}/del.json`,
+          params: { path },
         })
       );
       if (err) {
         window.$message.error(err);
         return false;
       }
-      const { code, msg } = res.data;
-      if (code !== "0") {
+      const { success, msg } = res.data;
+      if (!success) {
         window.$message.error(msg);
         return false;
       }

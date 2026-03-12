@@ -702,7 +702,7 @@ func (a *App) getImageDimensions(imagePath string) (int, int, error) {
 //
 //export DeleteImage
 func (a *App) DeleteImage(imagePath string) (*DeleteImageResult, error) {
-	if !a.config.IsAllowDelImg {
+	if !a.config.IsAllowDel {
 		return &DeleteImageResult{
 			Success: false,
 			Msg:     "删除功能已禁用",
