@@ -58,6 +58,7 @@ type Config struct {
 var (
 	videoListCache []string    // 视频列表缓存
 	imageListCache []ImageInfo // 图片列表缓存
+	randomAPI      string      // 随机API路径
 )
 
 // VideoInfo 视频信息结构体
@@ -176,6 +177,13 @@ func (a *App) GetConfig() *Config {
 	return a.config
 }
 
+// GetRandomAPI 获取随机API字符串
+//
+//export GetRandomAPI
+func (a *App) GetRandomAPI() string {
+	return randomAPI
+}
+
 // SelectDirectory 选择目录
 func (a *App) SelectDirectory() (string, error) {
 	selection, err := wailsruntime.OpenDirectoryDialog(a.ctx, wailsruntime.OpenDialogOptions{
@@ -189,14 +197,8 @@ func (a *App) SelectDirectory() (string, error) {
 
 // GetVideoList 获取视频文件列表
 func (a *App) GetVideoList() (*VideoInfo, error) {
-	// 使用公共扫描方法获取视频文件列表
-	videoList, err := a.scanFiles(a.config.VideoDir, a.config.AllowedExts, a.config.IsDeep)
-	if err != nil {
-		return nil, err
-	}
-
-	// 更新全局视频列表缓存
-	videoListCache = videoList
+	// 直接返回缓存的视频列表
+	videoList := videoListCache
 
 	// 确定当前视频
 	currentVideo := ""
@@ -340,20 +342,43 @@ func (a *App) StartServer() int {
 		a.StopServer()
 	}
 
+	// 生成随机API字符串
+	randomAPI = fmt.Sprintf("api%d", time.Now().UnixNano())
+	fmt.Printf("生成的随机API路径: %s\n", randomAPI)
+
+	// 启动时扫描并缓存视频列表
+	videoList, err := a.scanFiles(a.config.VideoDir, a.config.AllowedExts, a.config.IsDeep)
+	if err != nil {
+		fmt.Printf("扫描视频列表失败: %v\n", err)
+	} else {
+		videoListCache = videoList
+		fmt.Printf("扫描到 %d 个视频文件\n", len(videoList))
+	}
+
+	// 启动时扫描并缓存图片列表
+	imageList, err := a.scanImageFiles()
+	if err != nil {
+		fmt.Printf("扫描图片列表失败: %v\n", err)
+	} else {
+		imageListCache = imageList
+		fmt.Printf("扫描到 %d 个图片文件\n", len(imageList))
+	}
+
 	// 创建自定义的ServeMux
 	mux := http.NewServeMux()
 
-	// 创建HTTP路由
+	// 创建HTTP路由（包含随机API路径）
 	mux.HandleFunc("/", a.handleIndex)
-	mux.HandleFunc("/mv/list.json", a.handleVideos)
-	mux.HandleFunc("/mv/switch.json", a.handleSwitch)
-	mux.HandleFunc("/mv/del.json", a.handleDelete)
-	mux.HandleFunc("/img/getImgsList.json", a.handleImages)
-	mux.HandleFunc("/img/del.json", a.handleDeleteImage)
+	mux.HandleFunc("/GetRandomAPI.json", a.handleGetRandomAPI)
+	mux.HandleFunc("/"+randomAPI+"/list.json", a.handleVideos)
+	mux.HandleFunc("/"+randomAPI+"/switch.json", a.handleSwitch)
+	mux.HandleFunc("/"+randomAPI+"/del.json", a.handleDelete)
+	mux.HandleFunc("/"+randomAPI+"/getImgsList.json", a.handleImages)
+	mux.HandleFunc("/"+randomAPI+"/imagedel.json", a.handleDeleteImage)
 
-	// 配置静态文件服务
-	mux.Handle("/videos/", http.StripPrefix("/videos/", http.FileServer(http.Dir(a.config.VideoDir))))
-	mux.Handle("/images/", http.StripPrefix("/images/", http.FileServer(http.Dir(a.config.VideoDir))))
+	// 配置静态文件服务（包含随机API路径）
+	mux.Handle("/"+randomAPI+"/videos/", http.StripPrefix("/"+randomAPI+"/videos/", http.FileServer(http.Dir(a.config.VideoDir))))
+	mux.Handle("/"+randomAPI+"/images/", http.StripPrefix("/"+randomAPI+"/images/", http.FileServer(http.Dir(a.config.VideoDir))))
 
 	// 从嵌入的文件系统中提供assets
 	assetsFS, err := fs.Sub(frontendFS, "frontend/dist/assets")
@@ -524,6 +549,17 @@ func (a *App) handleDeleteImage(w http.ResponseWriter, r *http.Request) {
 	}`, result.Success, result.Msg)))
 }
 
+// handleGetRandomAPI 处理获取随机API路径请求
+func (a *App) handleGetRandomAPI(w http.ResponseWriter, r *http.Request) {
+	// 设置响应头
+	w.Header().Set("Content-Type", "application/json")
+
+	// 写入响应
+	w.Write([]byte(fmt.Sprintf(`{
+		"randomAPI": "%s"
+	}`, randomAPI)))
+}
+
 // OpenBrowser 打开浏览器
 func (a *App) OpenBrowser() error {
 	url := fmt.Sprintf("http://localhost:%d/mv", a.config.Port)
@@ -624,26 +660,16 @@ func (a *App) scanFiles(dir string, allowedExts []string, isDeep bool) ([]string
 	return fileList, nil
 }
 
-// GetImageList 获取图片文件列表
-//
-//export GetImageList
-func (a *App) GetImageList() (*ImageListResult, error) {
+// scanImageFiles 扫描图片文件并返回ImageInfo列表
+func (a *App) scanImageFiles() ([]ImageInfo, error) {
 	if a.config.VideoDir == "" {
-		return &ImageListResult{
-			Success:   true,
-			ImageList: []ImageInfo{},
-			Msg:       "请先选择目录",
-		}, nil
+		return []ImageInfo{}, nil
 	}
 
 	// 使用公共扫描方法获取图片文件列表
 	imageFiles, err := a.scanFiles(a.config.VideoDir, a.config.ImageExts, a.config.IsDeep)
 	if err != nil {
-		return &ImageListResult{
-			Success:   false,
-			ImageList: []ImageInfo{},
-			Msg:       "扫描图片失败: " + err.Error(),
-		}, nil
+		return nil, err
 	}
 
 	// 构建图片信息列表
@@ -660,8 +686,8 @@ func (a *App) GetImageList() (*ImageListResult, error) {
 			height = 0
 		}
 
-		// 计算相对路径（URL路径），前端会拼接API_PREFIX
-		urlPath := "/images/" + imageFile
+		// 计算相对路径（URL路径），包含randomAPI前缀
+		urlPath := "/" + randomAPI + "/images/" + imageFile
 
 		imageList = append(imageList, ImageInfo{
 			Pic:  urlPath,
@@ -671,8 +697,15 @@ func (a *App) GetImageList() (*ImageListResult, error) {
 		})
 	}
 
-	// 更新全局图片列表缓存
-	imageListCache = imageList
+	return imageList, nil
+}
+
+// GetImageList 获取图片文件列表
+//
+//export GetImageList
+func (a *App) GetImageList() (*ImageListResult, error) {
+	// 直接返回缓存的图片列表
+	imageList := imageListCache
 
 	return &ImageListResult{
 		Success:   true,
@@ -730,6 +763,14 @@ func (a *App) DeleteImage(imagePath string) (*DeleteImageResult, error) {
 			Success: false,
 			Msg:     "删除失败: " + err.Error(),
 		}, nil
+	}
+
+	// 从缓存中移除删除的图片
+	for i, img := range imageListCache {
+		if img.Path == imagePath {
+			imageListCache = append(imageListCache[:i], imageListCache[i+1:]...)
+			break
+		}
 	}
 
 	return &DeleteImageResult{

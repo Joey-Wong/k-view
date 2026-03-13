@@ -62,6 +62,7 @@ const volume = ref(1)
 const currentTime = ref(0)
 const duration = ref(0)
 const isDragging = ref(false)
+const randomAPI = ref("");
 
 let hideTimeout = null
 
@@ -207,13 +208,13 @@ function toggleFullscreen() {
 async function switchVideo(direction, showUI = true) {
   if (!currentVideo.value) return
   try {
-    const response = await fetch(`/mv/switch.json?current=${encodeURIComponent(currentVideo.value)}&direction=${direction}`)
+    const response = await fetch(`/${randomAPI.value}/switch.json?current=${encodeURIComponent(currentVideo.value)}&direction=${direction}`)
     const data = await response.json()
     if (data.success && data.currentVideo) {
       currentVideo.value = data.currentVideo
       videoList.value = data.videoList || videoList.value
       if (videoPlayer.value) {
-        videoPlayer.value.src = '/videos/' + currentVideo.value
+        videoPlayer.value.src = `/${randomAPI.value}/videos/` + currentVideo.value
         videoPlayer.value.play()
       }
       if (showUI) {
@@ -228,9 +229,8 @@ async function switchVideo(direction, showUI = true) {
 // 删除视频（直接删除，无需确认）
 async function deleteVideo() {
   if (!currentVideo.value) return
-
   try {
-    const response = await fetch(`/mv/del.json?fileName=${encodeURIComponent(currentVideo.value)}`)
+    const response = await fetch(`/${randomAPI.value}/del.json?fileName=${encodeURIComponent(currentVideo.value)}`)
     const data = await response.json()
     if (data.success) {
       if (data.hasVideo) {
@@ -241,7 +241,7 @@ async function deleteVideo() {
         // 更新当前视频
         currentVideo.value = data.currentVideo
         if (videoPlayer.value) {
-          videoPlayer.value.src = '/videos/' + currentVideo.value
+          videoPlayer.value.src = `/${randomAPI.value}/videos/` + currentVideo.value
           videoPlayer.value.play()
         }
         showControlsBar()
@@ -263,6 +263,17 @@ onMounted(async () => {
   document.addEventListener('mousemove', handleDocumentMouseMove)
   document.addEventListener('mouseup', handleDocumentMouseUp)
   
+  // 通过固定接口获取randomAPI
+  try {
+    const response = await fetch(`/GetRandomAPI.json`)
+    const data = await response.json()
+    randomAPI.value = data.randomAPI;
+  } catch (error) {
+    console.error('获取randomAPI失败:', error)
+    alert('无法连接到服务器，请确保服务已启动')
+    return
+  }
+  
   // 初始化音量
   if (videoPlayer.value) {
     videoPlayer.value.volume = volume.value
@@ -273,7 +284,7 @@ onMounted(async () => {
   
   // 初始化视频源
   try {
-    const response = await fetch('/mv/list.json')
+    const response = await fetch(`/${randomAPI.value}/list.json`)
     const data = await response.json()
     console.log('API 响应:', data)
     if (data.success && data.videoList && data.videoList.length > 0) {
@@ -287,7 +298,7 @@ onMounted(async () => {
       await nextTick()
       
       if (videoPlayer.value) {
-        const videoSrc = '/videos/' + currentVideo.value
+        const videoSrc = `/${randomAPI.value}/videos/` + currentVideo.value
         console.log('视频源:', videoSrc)
         videoPlayer.value.src = videoSrc
         // 加载视频

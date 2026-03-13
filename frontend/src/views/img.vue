@@ -37,6 +37,9 @@
           <n-form-item label="删除功能">
             <n-switch v-model:value="oldSet.delImg" />
           </n-form-item>
+          <n-form-item label="图片总数">
+            <n-input disabled v-model:value="ALLCOUNT" placeholder="请输入纵间距" />
+          </n-form-item>
           <n-form-item v-show="isShowPay" label="打赏一下">
             <n-space>
               <div class="pay-wrap">
@@ -99,6 +102,7 @@ export default {
   },
   data() {
     return {
+      randomAPI: '',
       isShowPay: true,
       COL_WIDTH: 0,
       SPACE_HORIZONTAL: SPACE_HORIZONTAL,
@@ -122,6 +126,7 @@ export default {
       },
       key: 0,
       ViewWidth: 0,
+      ALLCOUNT: 0, // 图片总数
     };
   },
   async mounted() {
@@ -143,6 +148,17 @@ export default {
       this.SPACE_HORIZONTAL = Number(this.oldSet.SPACE_HORIZONTAL);
       this.randomImg = this.oldSet.randomImg;
       this.delImg = this.oldSet.delImg;
+    }
+
+    // 先通过固定接口获取randomAPI
+    try {
+      const response = await fetch(`/GetRandomAPI.json`)
+      const data = await response.json()
+      this.randomAPI = data.randomAPI;
+    } catch (error) {
+      console.error('获取randomAPI失败:', error)
+      window.$message.error('无法连接到服务器，请确保服务已启动')
+      return
     }
 
     await this.search();
@@ -191,7 +207,8 @@ export default {
     },
     async search() {
       console.log(1);
-      const searchUrl = `${API_PREFIX}/getImgsList.json?t=${Date.now()}`;
+      // 获取随机API字符串
+      const searchUrl = `/${this.randomAPI}/getImgsList.json?t=${Date.now()}`;
       console.log(2);
       const [err, res] = await to(axios.get(searchUrl));
       console.log(err)
@@ -214,6 +231,8 @@ export default {
       }
       // const { name, type, pic, panLink, des } = res.data[0];
       this.LoopResult = resData;
+      // 设置图片总数
+      this.ALLCOUNT = data.length;
     },
     setElsWidth() {
       // 0-768-1200-
@@ -262,10 +281,11 @@ export default {
       });
     },
     async delImgHandle({ path, viewH }, i, index) {
+      // 获取随机API字符串
       const [err, res] = await to(
         axios({
           method: "get",
-          url: `${API_PREFIX}/del.json`,
+          url: `/${this.randomAPI}/imagedel.json`,
           params: { path },
         })
       );
@@ -283,6 +303,8 @@ export default {
         this.DelList.push(path);
         sessionStorage.setItem("DelList", JSON.stringify(this.DelList));
         this.ColHeightList[i] -= viewH - this.SPACE_VERTICAL;
+        // 删除图片后减少总数
+        this.ALLCOUNT--;
       }, 300);
     },
   },

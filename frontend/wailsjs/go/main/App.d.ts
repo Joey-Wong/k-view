@@ -10,6 +10,8 @@ export function GetConfig():Promise<main.Config>;
 
 export function GetImageList():Promise<main.ImageListResult>;
 
+export function GetRandomAPI():Promise<string>;
+
 export function GetVideoList():Promise<main.VideoInfo>;
 
 export function OpenBrowser():Promise<void>;

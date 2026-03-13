@@ -18,6 +18,10 @@ export function GetImageList() {
   return window['go']['main']['App']['GetImageList']();
 }
 
+export function GetRandomAPI() {
+  return window['go']['main']['App']['GetRandomAPI']();
+}
+
 export function GetVideoList() {
   return window['go']['main']['App']['GetVideoList']();
 }
