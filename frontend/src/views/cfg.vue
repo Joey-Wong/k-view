@@ -144,7 +144,7 @@ const startServer = async () => {
     )
     const port = await StartServer()
     isServerRunning.value = true
-    statusMsg.value = `启动成功: localhost:${port}/mv`
+    statusMsg.value = `启动成功: http://localhost:${port}/mv`
     // 自动打开浏览器
     await OpenBrowser()
     setTimeout(() => {

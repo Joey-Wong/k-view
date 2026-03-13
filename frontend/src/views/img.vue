@@ -68,6 +68,7 @@
 import axios from "axios";
 import { to, shuffleArray } from "@/utils";
 import { NForm, NFormItem, NInput, NModal, NCard, NSpace, NButton, useMessage, NSwitch } from "naive-ui";
+import { GetRandomAPI, GetImageList, DeleteImage } from "@/services/index.js";
 const API_PREFIX = "img";
 
 const getMinIndex = (arr) => {
@@ -152,7 +153,7 @@ export default {
 
     // 先通过固定接口获取randomAPI
     try {
-      const response = await fetch(`/GetRandomAPI.json`)
+      const response = await fetch(GetRandomAPI)
       const data = await response.json()
       this.randomAPI = data.randomAPI;
     } catch (error) {
@@ -207,8 +208,8 @@ export default {
     },
     async search() {
       console.log(1);
-      // 获取随机API字符串
-      const searchUrl = `/${this.randomAPI}/getImgsList.json?t=${Date.now()}`;
+      // 获取图片列表
+      const searchUrl = GetImageList.replace('@GetRandomAPI', this.randomAPI) + `?t=${Date.now()}`;
       console.log(2);
       const [err, res] = await to(axios.get(searchUrl));
       console.log(err)
@@ -281,11 +282,12 @@ export default {
       });
     },
     async delImgHandle({ path, viewH }, i, index) {
-      // 获取随机API字符串
+      // 删除图片
+      const deleteUrl = DeleteImage.replace('@GetRandomAPI', this.randomAPI);
       const [err, res] = await to(
         axios({
           method: "get",
-          url: `/${this.randomAPI}/imagedel.json`,
+          url: deleteUrl,
           params: { path },
         })
       );

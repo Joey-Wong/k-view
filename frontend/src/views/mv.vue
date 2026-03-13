@@ -48,6 +48,7 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { GetRandomAPI, GetVideoList, SwitchVideo, DeleteVideo, VideoPath } from '@/services/index.js'
 
 // 模板引用
 const videoPlayer = ref(null)
@@ -208,13 +209,15 @@ function toggleFullscreen() {
 async function switchVideo(direction, showUI = true) {
   if (!currentVideo.value) return
   try {
-    const response = await fetch(`/${randomAPI.value}/switch.json?current=${encodeURIComponent(currentVideo.value)}&direction=${direction}`)
+    const url = SwitchVideo.replace('@GetRandomAPI', randomAPI.value)
+    const response = await fetch(`${url}?current=${encodeURIComponent(currentVideo.value)}&direction=${direction}`)
     const data = await response.json()
     if (data.success && data.currentVideo) {
       currentVideo.value = data.currentVideo
       videoList.value = data.videoList || videoList.value
       if (videoPlayer.value) {
-        videoPlayer.value.src = `/${randomAPI.value}/videos/` + currentVideo.value
+        const videoPath = VideoPath.replace('@GetRandomAPI', randomAPI.value)
+        videoPlayer.value.src = `${videoPath}/${currentVideo.value}`
         videoPlayer.value.play()
       }
       if (showUI) {
@@ -230,7 +233,8 @@ async function switchVideo(direction, showUI = true) {
 async function deleteVideo() {
   if (!currentVideo.value) return
   try {
-    const response = await fetch(`/${randomAPI.value}/del.json?fileName=${encodeURIComponent(currentVideo.value)}`)
+    const url = DeleteVideo.replace('@GetRandomAPI', randomAPI.value)
+    const response = await fetch(`${url}?fileName=${encodeURIComponent(currentVideo.value)}`)
     const data = await response.json()
     if (data.success) {
       if (data.hasVideo) {
@@ -241,7 +245,8 @@ async function deleteVideo() {
         // 更新当前视频
         currentVideo.value = data.currentVideo
         if (videoPlayer.value) {
-          videoPlayer.value.src = `/${randomAPI.value}/videos/` + currentVideo.value
+          const videoPath = VideoPath.replace('@GetRandomAPI', randomAPI.value)
+          videoPlayer.value.src = `${videoPath}/${currentVideo.value}`
           videoPlayer.value.play()
         }
         showControlsBar()
@@ -265,7 +270,7 @@ onMounted(async () => {
   
   // 通过固定接口获取randomAPI
   try {
-    const response = await fetch(`/GetRandomAPI.json`)
+    const response = await fetch(GetRandomAPI)
     const data = await response.json()
     randomAPI.value = data.randomAPI;
   } catch (error) {
@@ -284,7 +289,8 @@ onMounted(async () => {
   
   // 初始化视频源
   try {
-    const response = await fetch(`/${randomAPI.value}/list.json`)
+    const url = GetVideoList.replace('@GetRandomAPI', randomAPI.value)
+    const response = await fetch(url)
     const data = await response.json()
     console.log('API 响应:', data)
     if (data.success && data.videoList && data.videoList.length > 0) {
@@ -298,7 +304,8 @@ onMounted(async () => {
       await nextTick()
       
       if (videoPlayer.value) {
-        const videoSrc = `/${randomAPI.value}/videos/` + currentVideo.value
+        const videoPath = VideoPath.replace('@GetRandomAPI', randomAPI.value)
+        const videoSrc = `${videoPath}/${currentVideo.value}`
         console.log('视频源:', videoSrc)
         videoPlayer.value.src = videoSrc
         // 加载视频
