@@ -78,16 +78,14 @@
       </div>
       
       <!-- 状态信息 -->
-      <div v-if="statusMsg" class="e-status">
-        {{ statusMsg }}
-      </div>
+      <div v-if="statusMsg" class="e-status" v-html="statusMsg" />
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { SetConfig, GetConfig, StartServer, StopServer, SelectDirectory, OpenBrowser } from '../../wailsjs/go/main/App'
+import { SetConfig, GetConfig, StartServer, StopServer, SelectDirectory } from '../../wailsjs/go/main/App'
 
 const config = ref({
   videoDir: '',
@@ -146,21 +144,8 @@ const startServer = async () => {
     isServerRunning.value = true
     
     // 构建状态消息
-    let msg = `[图片]${result.imageCount} [视频]${result.videoCount}`
-    
-    // 根据数量决定是否添加链接
-    if (result.videoCount > 0) {
-      msg += ` [视频地址]http://localhost:${result.port}/mv`
-    }
-    if (result.imageCount > 0) {
-      msg += ` [图片地址]http://localhost:${result.port}/img`
-    }
-    
+    const msg = `[图片]${result.imageCount} [视频]${result.videoCount}`
     statusMsg.value = msg
-    
-    setTimeout(() => {
-      statusMsg.value = ''
-    }, 2000)
   } catch (error) {
     console.error('启动服务失败:', error)
     statusMsg.value = '启动服务失败: ' + error.message
