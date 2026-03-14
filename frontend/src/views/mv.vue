@@ -49,6 +49,10 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { GetRandomAPI, GetVideoList, SwitchVideo, DeleteVideo, VideoPath } from '@/services/index.js'
+import { useMessage } from 'naive-ui'
+
+// 初始化消息提示
+window.$message = useMessage()
 
 // 模板引用
 const videoPlayer = ref(null)
@@ -212,7 +216,7 @@ async function switchVideo(direction, showUI = true) {
     const url = SwitchVideo.replace('@GetRandomAPI', randomAPI.value)
     const response = await fetch(`${url}?current=${encodeURIComponent(currentVideo.value)}&direction=${direction}`)
     const data = await response.json()
-    if (data.success && data.currentVideo) {
+    if (data.hasVideo && data.currentVideo) {
       currentVideo.value = data.currentVideo
       videoList.value = data.videoList || videoList.value
       if (videoPlayer.value) {
@@ -232,33 +236,43 @@ async function switchVideo(direction, showUI = true) {
 // 删除视频（直接删除，无需确认）
 async function deleteVideo() {
   if (!currentVideo.value) return
+  console.log('开始删除视频:', currentVideo.value)
   try {
     const url = DeleteVideo.replace('@GetRandomAPI', randomAPI.value)
     const response = await fetch(`${url}?fileName=${encodeURIComponent(currentVideo.value)}`)
     const data = await response.json()
+    console.log('删除响应:', data)
     if (data.success) {
+      window.$message.success(`视频已成功从磁盘删除`)
       if (data.hasVideo) {
-        // 从视频列表中移除当前视频
-        const currentIndex = videoList.value.indexOf(currentVideo.value)
-        videoList.value.splice(currentIndex, 1)
+        // 重新获取视频列表，确保数据一致
+        const listUrl = GetVideoList.replace('@GetRandomAPI', randomAPI.value)
+        const listResponse = await fetch(listUrl)
+        const listData = await listResponse.json()
+        console.log('获取视频列表响应:', listData)
         
-        // 更新当前视频
-        currentVideo.value = data.currentVideo
-        if (videoPlayer.value) {
-          const videoPath = VideoPath.replace('@GetRandomAPI', randomAPI.value)
-          videoPlayer.value.src = `${videoPath}/${currentVideo.value}`
-          videoPlayer.value.play()
+        if (listData.hasVideo && listData.videoList) {
+          videoList.value = listData.videoList
+          // 使用后端返回的 currentVideo
+          currentVideo.value = data.currentVideo
+          console.log('切换到新视频:', currentVideo.value)
+          if (videoPlayer.value) {
+            const videoPath = VideoPath.replace('@GetRandomAPI', randomAPI.value)
+            videoPlayer.value.src = `${videoPath}/${currentVideo.value}`
+            videoPlayer.value.play()
+          }
+          showControlsBar()
         }
-        showControlsBar()
       } else {
         // 没有视频了，重新加载页面
         window.location.reload()
       }
     } else {
-      alert(`删除失败：${data.msg}`)
+      window.$message.error(`删除失败：${data.msg}`)
     }
   } catch (error) {
-    alert(`删除失败：${error.message}`)
+    console.error('删除视频失败:', error)
+    window.$message.error(`删除失败：${error.message}`)
   }
 }
 
@@ -293,7 +307,7 @@ onMounted(async () => {
     const response = await fetch(url)
     const data = await response.json()
     console.log('API 响应:', data)
-    if (data.success && data.videoList && data.videoList.length > 0) {
+    if (data.hasVideo && data.videoList && data.videoList.length > 0) {
       videoList.value = data.videoList
       // 使用 API 返回的 currentVideo，如果没有则使用第一个视频
       currentVideo.value = data.currentVideo || data.videoList[0]

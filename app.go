@@ -169,7 +169,29 @@ func (a *App) SetConfig(videoDir string, port int, allowedExts []string, imageEx
 	a.config.IsDeep = isDeep
 
 	// 确保视频目录存在
-	return os.MkdirAll(videoDir, 0755)
+	if err := os.MkdirAll(videoDir, 0755); err != nil {
+		return err
+	}
+
+	// 重新扫描视频列表并更新缓存
+	videoList, err := a.scanFiles(a.config.VideoDir, a.config.AllowedExts, a.config.IsDeep)
+	if err != nil {
+		fmt.Printf("扫描视频列表失败: %v\n", err)
+	} else {
+		videoListCache = videoList
+		fmt.Printf("扫描到 %d 个视频文件\n", len(videoList))
+	}
+
+	// 重新扫描图片列表并更新缓存
+	imageList, err := a.scanImageFiles()
+	if err != nil {
+		fmt.Printf("扫描图片列表失败: %v\n", err)
+	} else {
+		imageListCache = imageList
+		fmt.Printf("扫描到 %d 个图片文件\n", len(imageList))
+	}
+
+	return nil
 }
 
 // GetConfig 获取配置
@@ -308,28 +330,36 @@ func (a *App) DeleteVideo(fileName string) (*DeleteResult, error) {
 		}, nil
 	}
 
-	// 获取删除后的视频列表
-	newVideoInfo, err := a.GetVideoList()
+	// 重新扫描视频列表并更新缓存
+	newVideoList, err := a.scanFiles(a.config.VideoDir, a.config.AllowedExts, a.config.IsDeep)
 	if err != nil {
-		return nil, err
+		return &DeleteResult{
+			Success:      false,
+			Msg:          "更新视频列表失败: " + err.Error(),
+			CurrentVideo: "",
+			HasVideo:     false,
+		}, nil
 	}
+
+	// 更新缓存
+	videoListCache = newVideoList
 
 	// 确定新的当前视频
 	newVideo := ""
-	if newVideoInfo.HasVideo {
+	if len(newVideoList) > 0 {
 		// 如果删除的是最后一个，则跳到第一个
 		nextIndex := currentIndex
-		if nextIndex >= len(newVideoInfo.VideoList) {
+		if nextIndex >= len(newVideoList) {
 			nextIndex = 0
 		}
-		newVideo = newVideoInfo.VideoList[nextIndex]
+		newVideo = newVideoList[nextIndex]
 	}
 
 	return &DeleteResult{
 		Success:      true,
 		Msg:          "删除成功",
 		CurrentVideo: newVideo,
-		HasVideo:     newVideoInfo.HasVideo,
+		HasVideo:     len(newVideoList) > 0,
 	}, nil
 }
 
@@ -442,19 +472,17 @@ func (a *App) handleVideos(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 使用 json.Marshal 生成正确的 JSON 格式
-	videoListJSON, _ := json.Marshal(videoInfo.VideoList)
+	responseJSON, err := json.Marshal(videoInfo)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	// 设置响应头
 	w.Header().Set("Content-Type", "application/json")
 
 	// 写入响应
-	w.Write([]byte(fmt.Sprintf(`{
-		"success": true,
-		"videoList": %s,
-		"currentVideo": "%s",
-		"hasVideo": %t,
-		"port": %d
-	}`, string(videoListJSON), videoInfo.CurrentVideo, videoInfo.HasVideo, videoInfo.Port)))
+	w.Write(responseJSON)
 }
 
 // handleSwitch 处理切换视频请求
@@ -470,18 +498,17 @@ func (a *App) handleSwitch(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 使用 json.Marshal 生成正确的 JSON 格式
-	videoListJSON, _ := json.Marshal(videoInfo.VideoList)
+	responseJSON, err := json.Marshal(videoInfo)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
 	// 设置响应头
 	w.Header().Set("Content-Type", "application/json")
 
 	// 写入响应
-	w.Write([]byte(fmt.Sprintf(`{
-		"success": true,
-		"videoList": %s,
-		"currentVideo": "%s",
-		"hasVideo": %t
-	}`, string(videoListJSON), videoInfo.CurrentVideo, videoInfo.HasVideo)))
+	w.Write(responseJSON)
 }
 
 // handleDelete 处理删除视频请求
@@ -495,16 +522,18 @@ func (a *App) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 使用 json.Marshal 生成正确的 JSON 格式
+	responseJSON, err := json.Marshal(result)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// 设置响应头
 	w.Header().Set("Content-Type", "application/json")
 
 	// 写入响应
-	w.Write([]byte(fmt.Sprintf(`{
-		"success": %t,
-		"msg": "%s",
-		"currentVideo": "%s",
-		"hasVideo": %t
-	}`, result.Success, result.Msg, result.CurrentVideo, result.HasVideo)))
+	w.Write(responseJSON)
 }
 
 // handleImages 处理获取图片列表请求
@@ -516,16 +545,18 @@ func (a *App) handleImages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 使用 json.Marshal 生成正确的 JSON 格式
+	responseJSON, err := json.Marshal(result)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// 设置响应头
 	w.Header().Set("Content-Type", "application/json")
 
 	// 写入响应
-	imageListJSON, _ := json.Marshal(result.ImageList)
-	w.Write([]byte(fmt.Sprintf(`{
-		"success": %t,
-		"imageList": %s,
-		"msg": "%s"
-	}`, result.Success, string(imageListJSON), result.Msg)))
+	w.Write(responseJSON)
 }
 
 // handleDeleteImage 处理删除图片请求
@@ -539,25 +570,39 @@ func (a *App) handleDeleteImage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 使用 json.Marshal 生成正确的 JSON 格式
+	responseJSON, err := json.Marshal(result)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// 设置响应头
 	w.Header().Set("Content-Type", "application/json")
 
 	// 写入响应
-	w.Write([]byte(fmt.Sprintf(`{
-		"success": %t,
-		"msg": "%s"
-	}`, result.Success, result.Msg)))
+	w.Write(responseJSON)
 }
 
 // handleGetRandomAPI 处理获取随机API路径请求
 func (a *App) handleGetRandomAPI(w http.ResponseWriter, r *http.Request) {
+	// 构建响应结构
+	response := map[string]string{
+		"randomAPI": randomAPI,
+	}
+
+	// 使用 json.Marshal 生成正确的 JSON 格式
+	responseJSON, err := json.Marshal(response)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
 	// 设置响应头
 	w.Header().Set("Content-Type", "application/json")
 
 	// 写入响应
-	w.Write([]byte(fmt.Sprintf(`{
-		"randomAPI": "%s"
-	}`, randomAPI)))
+	w.Write(responseJSON)
 }
 
 // OpenBrowser 打开浏览器
