@@ -80,6 +80,7 @@
       <!-- 状态信息 -->
       <div v-if="statusMsg" class="e-status" v-html="statusMsg" />
     </div>
+    <span class="version">v1.0.0</span>
   </div>
 </template>
 
@@ -319,5 +320,14 @@ const stopServer = async () => {
 
 input:focus {
   border-color: #4A89DC; /* 易语言焦点色 */
+}
+.version {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+  line-height: 18px;
+  position: fixed;
+  bottom: 6px;
+  right: 6px;
 }
 </style>
