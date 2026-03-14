@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"image"
 	_ "image/gif"
+	"image/jpeg"
 	_ "image/jpeg"
 	_ "image/png"
 	"io/fs"
@@ -22,6 +23,7 @@ import (
 
 	_ "golang.org/x/image/bmp"
 	_ "golang.org/x/image/webp"
+	_ "github.com/jdeng/goheif"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -113,7 +115,7 @@ func NewApp() *App {
 			AllowedExts:   []string{".mp4", ".avi", ".mov", ".mkv", ".flv", ".wmv"},
 			IsAllowDel:    false,
 			IsDeep:        true,
-			ImageExts:     []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".JPG", ".JPEG", ".PNG", ".GIF", ".WEBP", ".BMP"},
+			ImageExts:     []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".heic", ".JPG", ".JPEG", ".PNG", ".GIF", ".WEBP", ".BMP", ".HEIC"},
 			IsAllowDelImg: false,
 		},
 	}
@@ -415,7 +417,8 @@ func (a *App) StartServer() *StartServerResult {
 
 	// 配置静态文件服务（包含随机API路径）
 	mux.Handle("/"+randomAPI+"/videos/", http.StripPrefix("/"+randomAPI+"/videos/", http.FileServer(http.Dir(a.config.VideoDir))))
-	mux.Handle("/"+randomAPI+"/images/", http.StripPrefix("/"+randomAPI+"/images/", http.FileServer(http.Dir(a.config.VideoDir))))
+	// 使用自定义图片处理函数
+	mux.HandleFunc("/"+randomAPI+"/images/", a.handleImageFile)
 
 	// 从嵌入的文件系统中提供assets
 	assetsFS, err := fs.Sub(frontendFS, "frontend/dist/assets")
@@ -441,7 +444,7 @@ func (a *App) StartServer() *StartServerResult {
 	// 根据视频和图片数量决定打开浏览器
 	videoCount := len(videoListCache)
 	imageCount := len(imageListCache)
-	
+
 	if videoCount > 0 && imageCount > 0 {
 		// 两个都有，打开两个页面
 		a.OpenBrowserByType("both")
@@ -862,4 +865,62 @@ func (a *App) DeleteImage(imagePath string) (*DeleteImageResult, error) {
 		Success: true,
 		Msg:     "删除成功",
 	}, nil
+}
+
+// handleImageFile 处理图片文件请求，支持HEIC格式转换
+func (a *App) handleImageFile(w http.ResponseWriter, r *http.Request) {
+	// 获取文件路径
+	filePath := r.URL.Path[len("/"+randomAPI+"/images/"):]
+	if filePath == "" {
+		http.Error(w, "文件路径为空", http.StatusBadRequest)
+		return
+	}
+
+	// 构建完整文件路径
+	fullPath := filepath.Join(a.config.VideoDir, filepath.FromSlash(filePath))
+
+	// 检查文件是否存在
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		http.Error(w, "文件不存在", http.StatusNotFound)
+		return
+	}
+
+	// 获取文件扩展名
+	ext := strings.ToLower(filepath.Ext(fullPath))
+
+	// 如果是HEIC格式，转换为JPEG
+	if ext == ".heic" {
+		a.handleHEICImage(w, r, fullPath)
+		return
+	}
+
+	// 其他格式直接返回文件
+	http.ServeFile(w, r, fullPath)
+}
+
+// handleHEICImage 处理HEIC图片，转换为JPEG格式
+func (a *App) handleHEICImage(w http.ResponseWriter, r *http.Request, filePath string) {
+	// 打开HEIC文件
+	file, err := os.Open(filePath)
+	if err != nil {
+		http.Error(w, "无法打开文件: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer file.Close()
+
+	// 使用image包解码HEIC图片（通过匿名导入goheif注册了解码器）
+	img, _, err := image.Decode(file)
+	if err != nil {
+		http.Error(w, "解码HEIC图片失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// 设置响应头为JPEG格式
+	w.Header().Set("Content-Type", "image/jpeg")
+
+	// 编码为JPEG并写入响应
+	if err := jpeg.Encode(w, img, &jpeg.Options{Quality: 90}); err != nil {
+		http.Error(w, "编码JPEG失败: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
 }

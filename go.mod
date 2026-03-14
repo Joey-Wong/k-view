@@ -3,6 +3,7 @@ module wails-demo
 go 1.24.0
 
 require (
+	github.com/jdeng/goheif v0.0.0-20260309214039-46ce8d592019
 	github.com/wailsapp/wails/v2 v2.11.0
 	golang.org/x/image v0.36.0
 )
