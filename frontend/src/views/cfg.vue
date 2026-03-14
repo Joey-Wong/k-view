@@ -142,11 +142,22 @@ const startServer = async () => {
       config.value.isAllowDel,
       config.value.isDeep
     )
-    const port = await StartServer()
+    const result = await StartServer()
     isServerRunning.value = true
-    statusMsg.value = `启动成功: http://localhost:${port}/mv`
-    // 自动打开浏览器
-    await OpenBrowser()
+    
+    // 构建状态消息
+    let msg = `[图片]${result.imageCount} [视频]${result.videoCount}`
+    
+    // 根据数量决定是否添加链接
+    if (result.videoCount > 0) {
+      msg += ` [视频地址]http://localhost:${result.port}/mv`
+    }
+    if (result.imageCount > 0) {
+      msg += ` [图片地址]http://localhost:${result.port}/img`
+    }
+    
+    statusMsg.value = msg
+    
     setTimeout(() => {
       statusMsg.value = ''
     }, 2000)

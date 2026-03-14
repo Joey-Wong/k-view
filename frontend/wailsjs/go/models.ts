@@ -108,6 +108,22 @@ export namespace main {
 		    return a;
 		}
 	}
+	export class StartServerResult {
+	    port: number;
+	    videoCount: number;
+	    imageCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new StartServerResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.port = source["port"];
+	        this.videoCount = source["videoCount"];
+	        this.imageCount = source["imageCount"];
+	    }
+	}
 	export class VideoInfo {
 	    videoList: string[];
 	    currentVideo: string;

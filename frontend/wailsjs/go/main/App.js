@@ -30,6 +30,10 @@ export function OpenBrowser() {
   return window['go']['main']['App']['OpenBrowser']();
 }
 
+export function OpenBrowserByType(arg1) {
+  return window['go']['main']['App']['OpenBrowserByType'](arg1);
+}
+
 export function SelectDirectory() {
   return window['go']['main']['App']['SelectDirectory']();
 }

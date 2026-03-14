@@ -363,10 +363,17 @@ func (a *App) DeleteVideo(fileName string) (*DeleteResult, error) {
 	}, nil
 }
 
+// StartServerResult 启动服务器结果结构体
+type StartServerResult struct {
+	Port       int `json:"port"`
+	VideoCount int `json:"videoCount"`
+	ImageCount int `json:"imageCount"`
+}
+
 // StartServer 启动HTTP服务器
 //
 //export StartServer
-func (a *App) StartServer() int {
+func (a *App) StartServer() *StartServerResult {
 	// 如果服务器已经在运行，先停止
 	if a.server != nil {
 		a.StopServer()
@@ -431,7 +438,26 @@ func (a *App) StartServer() int {
 		}
 	}()
 
-	return a.config.Port
+	// 根据视频和图片数量决定打开浏览器
+	videoCount := len(videoListCache)
+	imageCount := len(imageListCache)
+	
+	if videoCount > 0 && imageCount > 0 {
+		// 两个都有，打开两个页面
+		a.OpenBrowserByType("both")
+	} else if videoCount > 0 {
+		// 只有视频，打开视频页面
+		a.OpenBrowserByType("video")
+	} else if imageCount > 0 {
+		// 只有图片，打开图片页面
+		a.OpenBrowserByType("image")
+	}
+
+	return &StartServerResult{
+		Port:       a.config.Port,
+		VideoCount: videoCount,
+		ImageCount: imageCount,
+	}
 }
 
 // StopServer 停止HTTP服务器
@@ -611,6 +637,20 @@ func (a *App) OpenBrowser() error {
 	exec.Command("cmd", "/c", "start", url).Run()
 	urlTest := fmt.Sprintf("http://localhost:%d/img", a.config.Port)
 	return exec.Command("cmd", "/c", "start", urlTest).Run()
+}
+
+// OpenBrowserByType 根据类型打开浏览器
+// openType: "video" 打开视频页面, "image" 打开图片页面, "both" 两个都打开
+func (a *App) OpenBrowserByType(openType string) error {
+	if openType == "video" || openType == "both" {
+		url := fmt.Sprintf("http://localhost:%d/mv", a.config.Port)
+		exec.Command("cmd", "/c", "start", url).Run()
+	}
+	if openType == "image" || openType == "both" {
+		url := fmt.Sprintf("http://localhost:%d/img", a.config.Port)
+		exec.Command("cmd", "/c", "start", url).Run()
+	}
+	return nil
 }
 
 // SelectFileOrDir 打开文件或目录选择对话框

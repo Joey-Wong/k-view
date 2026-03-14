@@ -16,6 +16,8 @@ export function GetVideoList():Promise<main.VideoInfo>;
 
 export function OpenBrowser():Promise<void>;
 
+export function OpenBrowserByType(arg1:string):Promise<void>;
+
 export function SelectDirectory():Promise<string>;
 
 export function SelectFileOrDir(arg1:string,arg2:boolean):Promise<string>;
@@ -24,7 +26,7 @@ export function SelectImageDirectory():Promise<string>;
 
 export function SetConfig(arg1:string,arg2:number,arg3:Array<string>,arg4:Array<string>,arg5:boolean,arg6:boolean):Promise<void>;
 
-export function StartServer():Promise<number>;
+export function StartServer():Promise<main.StartServerResult>;
 
 export function StopServer():Promise<void>;
 
