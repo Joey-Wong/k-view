@@ -8,6 +8,6 @@ app.use(router)
 app.use(VueLazyload, {
   loading: '',
   error: '',
-  attempt: 1
+  attempt: 1,
 })
 app.mount('#app')

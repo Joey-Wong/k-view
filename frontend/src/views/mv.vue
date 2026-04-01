@@ -4,8 +4,8 @@
       <div class="top-bar" :class="{ hidden: !showControls }">
         <div class="video-info">{{ videoInfoText }}</div>
       </div>
-      <video 
-        ref="videoPlayer" 
+      <video
+        ref="videoPlayer"
         preload="metadata"
         @timeupdate="updateProgress"
         @loadedmetadata="updateProgress"
@@ -22,17 +22,30 @@
           <button class="control-btn delete-btn" @click.stop="deleteVideo">🗑️</button>
           <div class="auto-play-switch">
             <label class="switch">
-              <input type="checkbox" v-model="autoPlayEnabled">
+              <input type="checkbox" v-model="autoPlayEnabled" />
               <span class="slider"></span>
             </label>
           </div>
-          <div class="progress-container" ref="progressContainer" @click.stop="handleProgressClick" @mousedown.stop="handleProgressMouseDown">
+          <div
+            ref="progressContainer"
+            class="progress-container"
+            @click.stop="handleProgressClick"
+            @mousedown.stop="handleProgressMouseDown"
+          >
             <div class="progress-bar" :style="{ width: progressPercent + '%' }"></div>
           </div>
           <div class="time-display">{{ timeDisplayText }}</div>
           <div class="volume-container">
             <span class="volume-icon">🔊</span>
-            <input type="range" class="volume-slider" v-model="volume" min="0" max="1" step="0.1" @input.stop="handleVolumeChange">
+            <input
+              type="range"
+              class="volume-slider"
+              v-model="volume"
+              min="0"
+              max="1"
+              step="0.1"
+              @input.stop="handleVolumeChange"
+            />
           </div>
           <button class="fullscreen-btn" @click.stop="toggleFullscreen">⛶</button>
         </div>
@@ -46,35 +59,44 @@
   </div>
 </template>
 
-<script setup>
+<script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { GetRandomAPI, GetVideoList, SwitchVideo, DeleteVideo, VideoPath } from '@/services/index.js'
 import { useMessage } from 'naive-ui'
+import {
+  GetRandomAPI,
+  GetVideoList,
+  SwitchVideo,
+  DeleteVideo,
+  VideoPath,
+  type VideoListResponse,
+  type SwitchVideoResponse,
+  type DeleteVideoResponse,
+} from '@/services/index'
 
 // 初始化消息提示
 window.$message = useMessage()
 
 // 模板引用
-const videoPlayer = ref(null)
-const progressContainer = ref(null)
+const videoPlayer = ref<HTMLVideoElement | null>(null)
+const progressContainer = ref<HTMLDivElement | null>(null)
 
 // 状态管理
-const currentVideo = ref('')
-const videoList = ref([])
-const autoPlayEnabled = ref(false)
-const showControls = ref(true)
-const volume = ref(1)
-const currentTime = ref(0)
-const duration = ref(0)
-const isDragging = ref(false)
-const randomAPI = ref("");
+const currentVideo = ref<string>('')
+const videoList = ref<string[]>([])
+const autoPlayEnabled = ref<boolean>(false)
+const showControls = ref<boolean>(true)
+const volume = ref<number>(1)
+const currentTime = ref<number>(0)
+const duration = ref<number>(0)
+const isDragging = ref<boolean>(false)
+const randomAPI = ref<string>('')
 
-let hideTimeout = null
+let hideTimeout: ReturnType<typeof setTimeout> | null = null
 
 // 计算属性
 const hasVideo = computed(() => currentVideo.value && currentVideo.value.length > 0)
 
-const videoInfoText = computed(() => {
+const videoInfoText = computed((): string => {
   if (!hasVideo.value) return ''
   const currentIndex = videoList.value.indexOf(currentVideo.value)
   const total = videoList.value.length
@@ -82,28 +104,28 @@ const videoInfoText = computed(() => {
   return `${displayIndex}/${total} ${currentVideo.value}`
 })
 
-const playBtnText = computed(() => {
+const playBtnText = computed((): string => {
   return videoPlayer.value && !videoPlayer.value.paused ? '⏸️' : '▶️'
 })
 
-const progressPercent = computed(() => {
+const progressPercent = computed((): number => {
   if (!duration.value) return 0
   return (currentTime.value / duration.value) * 100
 })
 
-const timeDisplayText = computed(() => {
+const timeDisplayText = computed((): string => {
   return `${formatTime(currentTime.value)} / ${formatTime(duration.value)}`
 })
 
 // 格式化时间
-function formatTime(seconds) {
+function formatTime(seconds: number): string {
   const mins = Math.floor(seconds / 60)
   const secs = Math.floor(seconds % 60)
   return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
 }
 
 // 更新进度条和时间显示
-function updateProgress() {
+function updateProgress(): void {
   if (videoPlayer.value) {
     currentTime.value = videoPlayer.value.currentTime
     duration.value = videoPlayer.value.duration
@@ -111,7 +133,7 @@ function updateProgress() {
 }
 
 // 显示控制栏
-function showControlsBar() {
+function showControlsBar(): void {
   showControls.value = true
   if (hideTimeout) {
     clearTimeout(hideTimeout)
@@ -122,17 +144,17 @@ function showControlsBar() {
 }
 
 // 鼠标移动事件
-function handleMouseMove() {
+function handleMouseMove(): void {
   showControlsBar()
 }
 
 // 点击事件
-function handleClick() {
+function handleClick(): void {
   showControlsBar()
 }
 
 // 播放/暂停
-function togglePlay() {
+function togglePlay(): void {
   if (videoPlayer.value) {
     if (videoPlayer.value.paused) {
       videoPlayer.value.play()
@@ -143,29 +165,30 @@ function togglePlay() {
 }
 
 // 播放事件
-function handlePlay() {
+function handlePlay(): void {
   showControlsBar()
 }
 
 // 暂停事件
-function handlePause() {
+function handlePause(): void {
   showControlsBar()
 }
 
 // 视频播放结束
-function handleEnded() {
+function handleEnded(): void {
   if (autoPlayEnabled.value) {
     switchVideo('next', false)
   }
 }
 
 // 视频加载错误处理
-function handleError(e) {
-  alert(`视频加载失败：${e.target.error.message}`)
+function handleError(e: Event): void {
+  const target = e.target as HTMLVideoElement
+  alert(`视频加载失败：${target.error?.message ?? '未知错误'}`)
 }
 
 // 点击进度条跳转
-function handleProgressClick(e) {
+function handleProgressClick(e: MouseEvent): void {
   if (videoPlayer.value && progressContainer.value) {
     const rect = progressContainer.value.getBoundingClientRect()
     const pos = (e.clientX - rect.left) / rect.width
@@ -174,13 +197,13 @@ function handleProgressClick(e) {
 }
 
 // 进度条拖动开始
-function handleProgressMouseDown(e) {
+function handleProgressMouseDown(e: MouseEvent): void {
   isDragging.value = true
   handleProgressClick(e)
 }
 
 // 鼠标移动事件（用于进度条拖动）
-function handleDocumentMouseMove(e) {
+function handleDocumentMouseMove(e: MouseEvent): void {
   if (isDragging.value && videoPlayer.value && progressContainer.value) {
     const rect = progressContainer.value.getBoundingClientRect()
     const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width))
@@ -189,19 +212,19 @@ function handleDocumentMouseMove(e) {
 }
 
 // 鼠标松开事件
-function handleDocumentMouseUp() {
+function handleDocumentMouseUp(): void {
   isDragging.value = false
 }
 
 // 音量控制
-function handleVolumeChange() {
+function handleVolumeChange(): void {
   if (videoPlayer.value) {
     videoPlayer.value.volume = volume.value
   }
 }
 
 // 全屏切换
-function toggleFullscreen() {
+function toggleFullscreen(): void {
   if (document.fullscreenElement) {
     document.exitFullscreen()
   } else {
@@ -210,18 +233,20 @@ function toggleFullscreen() {
 }
 
 // 切换视频
-async function switchVideo(direction, showUI = true) {
+async function switchVideo(direction: 'prev' | 'next', showUI = true): Promise<void> {
   if (!currentVideo.value) return
   try {
     const url = SwitchVideo.replace('@GetRandomAPI', randomAPI.value)
-    const response = await fetch(`${url}?current=${encodeURIComponent(currentVideo.value)}&direction=${direction}`)
-    const data = await response.json()
+    const response = await fetch(
+      `${url}?current=${encodeURIComponent(currentVideo.value)}&direction=${direction}`,
+    )
+    const data: SwitchVideoResponse = await response.json()
     if (data.hasVideo && data.currentVideo) {
       currentVideo.value = data.currentVideo
       videoList.value = data.videoList || videoList.value
       if (videoPlayer.value) {
-        const videoPath = VideoPath.replace('@GetRandomAPI', randomAPI.value)
-        videoPlayer.value.src = `${videoPath}/${currentVideo.value}`
+        const videoPathBase = VideoPath.replace('@GetRandomAPI', randomAPI.value)
+        videoPlayer.value.src = `${videoPathBase}/${currentVideo.value}`
         videoPlayer.value.play()
       }
       if (showUI) {
@@ -229,42 +254,38 @@ async function switchVideo(direction, showUI = true) {
       }
     }
   } catch (error) {
-    alert(`切换视频失败：${error.message}`)
+    alert(`切换视频失败：${(error as Error).message}`)
   }
 }
 
 // 删除视频（直接删除，无需确认）
-async function deleteVideo() {
+async function deleteVideo(): Promise<void> {
   if (!currentVideo.value) return
   console.log('开始删除视频:', currentVideo.value)
   try {
     const url = DeleteVideo.replace('@GetRandomAPI', randomAPI.value)
     const response = await fetch(`${url}?fileName=${encodeURIComponent(currentVideo.value)}`)
-    const data = await response.json()
+    const data: DeleteVideoResponse = await response.json()
     console.log('删除响应:', data)
     if (data.success) {
       window.$message.success(`视频已成功从磁盘删除`)
       if (data.hasVideo) {
-        // 重新获取视频列表，确保数据一致
         const listUrl = GetVideoList.replace('@GetRandomAPI', randomAPI.value)
         const listResponse = await fetch(listUrl)
-        const listData = await listResponse.json()
+        const listData: VideoListResponse = await listResponse.json()
         console.log('获取视频列表响应:', listData)
-        
         if (listData.hasVideo && listData.videoList) {
           videoList.value = listData.videoList
-          // 使用后端返回的 currentVideo
           currentVideo.value = data.currentVideo
           console.log('切换到新视频:', currentVideo.value)
           if (videoPlayer.value) {
-            const videoPath = VideoPath.replace('@GetRandomAPI', randomAPI.value)
-            videoPlayer.value.src = `${videoPath}/${currentVideo.value}`
+            const videoPathBase = VideoPath.replace('@GetRandomAPI', randomAPI.value)
+            videoPlayer.value.src = `${videoPathBase}/${currentVideo.value}`
             videoPlayer.value.play()
           }
           showControlsBar()
         }
       } else {
-        // 没有视频了，重新加载页面
         window.location.reload()
       }
     } else {
@@ -272,7 +293,7 @@ async function deleteVideo() {
     }
   } catch (error) {
     console.error('删除视频失败:', error)
-    window.$message.error(`删除失败：${error.message}`)
+    window.$message.error(`删除失败：${(error as Error).message}`)
   }
 }
 
@@ -281,52 +302,46 @@ onMounted(async () => {
   // 添加全局事件监听
   document.addEventListener('mousemove', handleDocumentMouseMove)
   document.addEventListener('mouseup', handleDocumentMouseUp)
-  
-  // 通过固定接口获取randomAPI
+
+  // 通过固定接口获取 randomAPI
   try {
     const response = await fetch(GetRandomAPI)
-    const data = await response.json()
-    randomAPI.value = data.randomAPI;
+    const data: { randomAPI: string } = await response.json()
+    randomAPI.value = data.randomAPI
   } catch (error) {
     console.error('获取randomAPI失败:', error)
     alert('无法连接到服务器，请确保服务已启动')
     return
   }
-  
+
   // 初始化音量
   if (videoPlayer.value) {
     videoPlayer.value.volume = volume.value
   }
-  
+
   // 等待 DOM 更新完成
   await nextTick()
-  
+
   // 初始化视频源
   try {
     const url = GetVideoList.replace('@GetRandomAPI', randomAPI.value)
     const response = await fetch(url)
-    const data = await response.json()
+    const data: VideoListResponse = await response.json()
     console.log('API 响应:', data)
     if (data.hasVideo && data.videoList && data.videoList.length > 0) {
       videoList.value = data.videoList
-      // 使用 API 返回的 currentVideo，如果没有则使用第一个视频
       currentVideo.value = data.currentVideo || data.videoList[0]
       console.log('当前视频:', currentVideo.value)
-      console.log('videoPlayer.value:', videoPlayer.value)
-      
-      // 再次等待确保 videoPlayer 已经准备好
+
       await nextTick()
-      
+
       if (videoPlayer.value) {
-        const videoPath = VideoPath.replace('@GetRandomAPI', randomAPI.value)
-        const videoSrc = `${videoPath}/${currentVideo.value}`
+        const videoPathBase = VideoPath.replace('@GetRandomAPI', randomAPI.value)
+        const videoSrc = `${videoPathBase}/${currentVideo.value}`
         console.log('视频源:', videoSrc)
         videoPlayer.value.src = videoSrc
-        // 加载视频
         videoPlayer.value.load()
-        console.log('视频已加载，duration:', videoPlayer.value.duration)
-        // 尝试自动播放，如果失败则等待用户手动点击
-        videoPlayer.value.play().catch(err => {
+        videoPlayer.value.play().catch((err: Error) => {
           console.log('自动播放失败，等待用户手动播放:', err.message)
         })
       }
@@ -334,7 +349,7 @@ onMounted(async () => {
   } catch (error) {
     console.error('初始化视频失败：', error)
   }
-  
+
   // 初始显示控制栏
   showControlsBar()
 })
@@ -378,14 +393,14 @@ video {
   left: 0;
   right: 0;
   padding: 20px;
-  background: linear-gradient(to bottom, rgba(0,0,0,0.7), transparent);
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.7), transparent);
   transition: opacity 0.3s ease;
   z-index: 10;
 }
 .video-info {
   font-size: 18px;
   color: #fff;
-  text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
 }
 .bottom-bar {
   position: absolute;
@@ -393,7 +408,7 @@ video {
   left: 0;
   right: 0;
   padding: 20px;
-  background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.7), transparent);
   transition: opacity 0.3s ease;
   z-index: 10;
 }
@@ -460,7 +475,7 @@ button:active {
 }
 .slider:before {
   position: absolute;
-  content: "";
+  content: '';
   height: 18px;
   width: 18px;
   left: 3px;
@@ -496,7 +511,7 @@ input:checked + .slider:before {
 .progress-container {
   flex: 1;
   height: 6px;
-  background: rgba(255,255,255,0.3);
+  background: rgba(255, 255, 255, 0.3);
   border-radius: 3px;
   cursor: pointer;
   position: relative;
@@ -520,7 +535,7 @@ input:checked + .slider:before {
   text-align: center;
 }
 .control-btn {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   border: none;
   color: white;
   padding: 2px 6px;
@@ -533,7 +548,7 @@ input:checked + .slider:before {
   justify-content: center;
 }
 .control-btn:hover {
-  background: rgba(255,255,255,0.3);
+  background: rgba(255, 255, 255, 0.3);
   transform: scale(1.05);
 }
 .play-btn {
@@ -551,7 +566,7 @@ input:checked + .slider:before {
   width: 100px;
   height: 4px;
   -webkit-appearance: none;
-  background: rgba(255,255,255,0.3);
+  background: rgba(255, 255, 255, 0.3);
   border-radius: 2px;
   cursor: pointer;
 }
@@ -564,7 +579,7 @@ input:checked + .slider:before {
   cursor: pointer;
 }
 .fullscreen-btn {
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   border: none;
   color: white;
   padding: 2px 6px;
@@ -577,7 +592,7 @@ input:checked + .slider:before {
   justify-content: center;
 }
 .fullscreen-btn:hover {
-  background: rgba(255,255,255,0.3);
+  background: rgba(255, 255, 255, 0.3);
   transform: scale(1.05);
 }
 </style>

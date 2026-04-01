@@ -1,29 +1,39 @@
 <template>
-  <div ref="view" class="wrap" :style="{ padding: `0 ${SPACE_HORIZONTAL}px` }">
+  <div ref="viewRef" class="wrap" :style="{ padding: `0 ${SPACE_HORIZONTAL}px` }">
     <img class="setting-img" src="@/assets/imgs/setting.png" @click="openSet()" />
-    <div v-for="(v, i) in LoopResultRes" :key="`${i}`" :style="{ width: `${COL_WIDTH}px`, marginRight: i < LoopResultRes.length - 1 ? `${SPACE_HORIZONTAL}px` : '0' }">
+    <div
+      v-for="(col, i) in loopResultRes"
+      :key="`col-${i}`"
+      :style="{
+        width: `${colWidth}px`,
+        marginRight: i < loopResultRes.length - 1 ? `${SPACE_HORIZONTAL}px` : '0',
+      }"
+    >
       <div
-        class="content-wrap"
-        v-for="(item, index) in v"
+        v-for="(item, index) in col"
         :key="`${i}-${index}-${item.path}`"
+        class="content-wrap"
         :style="{ height: `${item.viewH}px`, marginBottom: `${SPACE_VERTICAL}px` }"
-        v-show="DelList.indexOf(item.path) === -1"
+        v-show="!delList.includes(item.path)"
       >
         <img style="width: 100%" v-lazy="item.pic" />
-        <img v-if="oldSet.delImg" class="del-img" src="@/assets/imgs/del.png" @click="delImgHandle(item, i, index)" />
+        <img
+          v-if="oldSet.delImg"
+          class="del-img"
+          src="@/assets/imgs/del.png"
+          @click="delImgHandle(item, i)"
+        />
       </div>
     </div>
+
     <n-modal
-      :style="{
-        maxWidth: '500px',
-        backgroundColor: '#fff',
-      }"
       v-model:show="showModal"
+      :style="{ maxWidth: '500px', backgroundColor: '#fff' }"
     >
       <n-card header-class="card-header" size="small" title="设置" :bordered="false">
         <n-form ref="formRef" label-placement="left" label-width="auto" require-mark-placement="right-hanging">
           <n-form-item label="列数">
-            <n-input v-model:value="oldSet.rowCount" :placeholder="`请输入列数`" />
+            <n-input v-model:value="oldSet.rowCount" placeholder="请输入列数" />
           </n-form-item>
           <n-form-item label="横间距">
             <n-input v-model:value="oldSet.SPACE_HORIZONTAL" placeholder="请输入横间距" />
@@ -38,7 +48,7 @@
             <n-switch v-model:value="oldSet.delImg" />
           </n-form-item>
           <n-form-item label="图片总数">
-            <n-input disabled v-model:value="ALLCOUNT" placeholder="请输入纵间距" />
+            <n-input disabled :value="String(allCount)" placeholder="图片总数" />
           </n-form-item>
           <n-form-item v-show="isShowPay" label="打赏一下">
             <n-space>
@@ -56,262 +66,260 @@
           </n-form-item>
         </n-form>
         <n-space justify="end">
-          <n-button @click="cancle()">取消</n-button>
-          <n-button @click="save()" type="success">保存</n-button>
+          <n-button @click="cancel()">取消</n-button>
+          <n-button type="success" @click="save()">保存</n-button>
         </n-space>
       </n-card>
     </n-modal>
   </div>
 </template>
 
-<script>
-import axios from "axios";
-import { to, shuffleArray } from "@/utils";
-import { NForm, NFormItem, NInput, NModal, NCard, NSpace, NButton, useMessage, NSwitch } from "naive-ui";
-import { GetRandomAPI, GetImageList, DeleteImage } from "@/services/index.js";
-const API_PREFIX = "img";
+<script setup lang="ts">
+import { ref, reactive, onMounted, onUnmounted } from 'vue'
+import axios from 'axios'
+import {
+  NForm,
+  NFormItem,
+  NInput,
+  NModal,
+  NCard,
+  NSpace,
+  NButton,
+  NSwitch,
+  useMessage,
+} from 'naive-ui'
+import { to, shuffleArray } from '@/utils'
+import { GetRandomAPI, GetImageList, DeleteImage, type ImageItem } from '@/services/index'
 
-const getMinIndex = (arr) => {
-  let min = arr[0];
-  //声明了个变量 保存下标值
-  let index = 0;
-  for (var i = 0; i < arr.length; i++) {
+// ── 类型定义 ──────────────────────────────────────────
+interface ViewItem {
+  viewH: number
+  pic: string
+  path: string
+}
+
+interface Settings {
+  rowCount: string
+  SPACE_VERTICAL: string
+  SPACE_HORIZONTAL: string
+  randomImg: boolean
+  delImg: boolean
+}
+
+// ── 常量 ──────────────────────────────────────────────
+const DEFAULT_SPACE_HORIZONTAL = 4
+const DEFAULT_SPACE_VERTICAL = 4
+
+// ── 工具函数 ──────────────────────────────────────────
+const getMinIndex = (arr: number[]): number => {
+  let min = arr[0]
+  let index = 0
+  for (let i = 0; i < arr.length; i++) {
     if (min > arr[i]) {
-      min = arr[i];
-      index = i;
+      min = arr[i]
+      index = i
     }
   }
-  return index;
-};
-// 图片默认最小宽高
-const SPACE_HORIZONTAL = 4; // 元素块横向间距
-const SPACE_VERTICAL = 4; // 元素块纵向间距
-export default {
-  name: "Search",
-  setup() {
-    window.$message = useMessage();
-  },
-  components: {
-    NForm,
-    NFormItem,
-    NInput,
-    NCard,
-    NModal,
-    NSpace,
-    NButton,
-    NSwitch,
-  },
-  data() {
-    return {
-      randomAPI: '',
-      isShowPay: true,
-      COL_WIDTH: 0,
-      SPACE_HORIZONTAL: SPACE_HORIZONTAL,
-      SPACE_VERTICAL: SPACE_VERTICAL,
-      rowCount: 0, // 每行个数
-      randomImg: true,
-      delImg: false,
-      timerID: null,
-      List: [], // 列表展示数据 等于所有数据 [[],[]] // 每个数组一行
-      LoopResult: [], // 所有数据 []
-      LoopResultRes: [],
-      DelList: [], // 已删除的图片
-      ColHeightList: [], // 每列的已有高度
-      showModal: false, // 展示设置弹窗
-      oldSet: {
-        rowCount: "0",
-        SPACE_VERTICAL: `${SPACE_VERTICAL}`,
-        SPACE_HORIZONTAL: `${SPACE_HORIZONTAL}`,
-        randomImg: false,
-        delImg: false,
-      },
-      key: 0,
-      ViewWidth: 0,
-      ALLCOUNT: 0, // 图片总数
-    };
-  },
-  async mounted() {
-    const isShowPay = localStorage.getItem("IsShowPay");
-    if (isShowPay) {
-      this.isShowPay = false;
-    }
-    const DelList = sessionStorage.getItem("DelList");
-    if (DelList) {
-      this.DelList = JSON.parse(DelList);
-    }
-    this.ViewWidth = this.$refs.view.clientWidth;
+  return index
+}
 
-    const cfg = localStorage.getItem("cfg");
-    if (cfg) {
-      this.oldSet = JSON.parse(cfg);
-      this.rowCount = Number(this.oldSet.rowCount);
-      this.SPACE_VERTICAL = Number(this.oldSet.SPACE_VERTICAL);
-      this.SPACE_HORIZONTAL = Number(this.oldSet.SPACE_HORIZONTAL);
-      this.randomImg = this.oldSet.randomImg;
-      this.delImg = this.oldSet.delImg;
+// ── 消息 ──────────────────────────────────────────────
+window.$message = useMessage()
+
+// ── 模板引用 ──────────────────────────────────────────
+const viewRef = ref<HTMLDivElement | null>(null)
+
+// ── 状态 ──────────────────────────────────────────────
+const randomAPI = ref<string>('')
+const isShowPay = ref<boolean>(true)
+const colWidth = ref<number>(0)
+const SPACE_HORIZONTAL = ref<number>(DEFAULT_SPACE_HORIZONTAL)
+const SPACE_VERTICAL = ref<number>(DEFAULT_SPACE_VERTICAL)
+const rowCount = ref<number>(0)
+const randomImg = ref<boolean>(true)
+const delImg = ref<boolean>(false)
+const timerID = ref<ReturnType<typeof setTimeout> | null>(null)
+const loopResult = ref<ImageItem[]>([])
+const loopResultRes = ref<ViewItem[][]>([])
+const delList = ref<string[]>([])
+const colHeightList = ref<number[]>([])
+const showModal = ref<boolean>(false)
+const viewWidth = ref<number>(0)
+const allCount = ref<number>(0)
+
+const oldSet = reactive<Settings>({
+  rowCount: '0',
+  SPACE_VERTICAL: `${DEFAULT_SPACE_VERTICAL}`,
+  SPACE_HORIZONTAL: `${DEFAULT_SPACE_HORIZONTAL}`,
+  randomImg: false,
+  delImg: false,
+})
+
+// ── 方法 ──────────────────────────────────────────────
+function openSet(): void {
+  oldSet.rowCount = `${rowCount.value}`
+  oldSet.SPACE_VERTICAL = `${SPACE_VERTICAL.value}`
+  oldSet.SPACE_HORIZONTAL = `${SPACE_HORIZONTAL.value}`
+  oldSet.randomImg = randomImg.value
+  oldSet.delImg = delImg.value
+  showModal.value = true
+}
+
+function cancel(): void {
+  showModal.value = false
+}
+
+async function save(): Promise<void> {
+  showModal.value = false
+  rowCount.value = Number(oldSet.rowCount)
+  SPACE_VERTICAL.value = Number(oldSet.SPACE_VERTICAL)
+  SPACE_HORIZONTAL.value = Number(oldSet.SPACE_HORIZONTAL)
+  // 触发乱序
+  if (!randomImg.value && oldSet.randomImg) {
+    loopResult.value = shuffleArray(loopResult.value)
+  }
+  randomImg.value = oldSet.randomImg
+  delImg.value = oldSet.delImg
+  localStorage.setItem('cfg', JSON.stringify({ ...oldSet }))
+  setElsWidth()
+}
+
+function resizePage(): void {
+  if (timerID.value) clearTimeout(timerID.value)
+  timerID.value = setTimeout(() => {
+    const width = viewRef.value?.clientWidth ?? 0
+    if (width !== viewWidth.value) {
+      viewWidth.value = width
+      getViewWidth()
     }
+  }, 100)
+}
 
-    // 先通过固定接口获取randomAPI
-    try {
-      const response = await fetch(GetRandomAPI)
-      const data = await response.json()
-      this.randomAPI = data.randomAPI;
-    } catch (error) {
-      console.error('获取randomAPI失败:', error)
-      window.$message.error('无法连接到服务器，请确保服务已启动')
-      return
-    }
+async function search(): Promise<void> {
+  const searchUrl =
+    GetImageList.replace('@GetRandomAPI', randomAPI.value) + `?t=${Date.now()}`
+  const [err, res] = await to(axios.get<{ imageList: ImageItem[] }>(searchUrl))
+  if (err || !res) {
+    window.$message.error(String(err))
+    return
+  }
+  const data = res.data.imageList
+  if (!data || data.length === 0) {
+    window.$message.error('暂无数据')
+    return
+  }
+  loopResult.value = randomImg.value ? shuffleArray(data) : data
+  allCount.value = data.length
+}
 
-    await this.search();
-    this.getViewWidth();
-    window.addEventListener("resize", this.resizePage);
-  },
-  methods: {
-    openSet() {
-      this.oldSet = {
-        rowCount: `${this.rowCount}`,
-        SPACE_VERTICAL: `${this.SPACE_VERTICAL}`,
-        SPACE_HORIZONTAL: `${this.SPACE_HORIZONTAL}`,
-        randomImg: this.randomImg,
-        delImg: this.delImg,
-      };
-      this.showModal = true;
-    },
-    cancle() {
-      this.showModal = false;
-    },
-    async save() {
-      this.showModal = false;
-      this.rowCount = Number(this.oldSet.rowCount);
-      this.SPACE_VERTICAL = Number(this.oldSet.SPACE_VERTICAL);
-      this.SPACE_HORIZONTAL = Number(this.oldSet.SPACE_HORIZONTAL);
-      // 触发乱序
-      if (!this.randomImg && this.oldSet.randomImg) {
-        this.key++;
-        this.LoopResult = shuffleArray(this.LoopResult);
-      }
-      this.randomImg = this.oldSet.randomImg;
-      this.delImg = this.oldSet.delImg;
-      localStorage.setItem("cfg", JSON.stringify(this.oldSet));
-      this.setElsWidth();
-    },
-    resizePage() {
-      // 防抖
-      clearTimeout(this.timerID);
-      this.timerID = setTimeout(() => {
-        const width = this.$refs.view.clientWidth;
-        if (width !== this.ViewWidth) {
-          this.ViewWidth = width;
-          this.getViewWidth();
-        }
-      }, 100);
-    },
-    async search() {
-      console.log(1);
-      // 获取图片列表
-      const searchUrl = GetImageList.replace('@GetRandomAPI', this.randomAPI) + `?t=${Date.now()}`;
-      console.log(2);
-      const [err, res] = await to(axios.get(searchUrl));
-      console.log(err)
-      console.log(3);
-      console.log(res);
-      if (err) {
-        window.$message.error(err);
-        return false;
-      }
-      const data = res.data.imageList;
-      console.log(4);
-      console.log(data);
-      if (!data || data.length === 0) {
-        window.$message.error("暂无数据");
-        return false;
-      }
-      let resData = data;
-      if (this.randomImg) {
-        resData = shuffleArray(data);
-      }
-      // const { name, type, pic, panLink, des } = res.data[0];
-      this.LoopResult = resData;
-      // 设置图片总数
-      this.ALLCOUNT = data.length;
-    },
-    setElsWidth() {
-      // 0-768-1200-
-      // 使用getBoundingClientRect获取实际可用宽度（不包括滚动条）
-      const rect = this.$refs.view.getBoundingClientRect();
-      const width = rect.width;
-      // 减去左右padding
-      const contentWidth = width - 2 * this.SPACE_HORIZONTAL;
-      // 计算每列宽度：(内容宽度 - (列数-1)*列间距) / 列数
-      this.COL_WIDTH = parseInt((contentWidth - (this.rowCount - 1) * this.SPACE_HORIZONTAL) / this.rowCount);
-      this.splitData();
-    },
-    getViewWidth() {
-      // 0-768-1200-
-      if (this.rowCount) {
-        this.setElsWidth();
-        return false;
-      }
-      const width = this.$refs.view.clientWidth;
-      if (width <= 800) {
-        this.rowCount = 2;
-        this.setElsWidth();
-      } else {
-        this.rowCount = parseInt(width / 800) * 2;
-        this.setElsWidth();
-      }
-    },
-    splitData() {
-      this.ColHeightList = Array(this.rowCount).fill(this.SPACE_VERTICAL);
-      this.LoopResultRes = Array(this.rowCount)
-        .fill("")
-        .map(() => []); // 存N列，确保每个子数组都是独立实例
-      if (!this.LoopResult.length) {
-        return false;
-      }
-      this.LoopResult.forEach((item) => {
-        const mixIndex = getMinIndex(this.ColHeightList);
-        const height = parseInt((this.COL_WIDTH * item.picH) / item.picW);
+function setElsWidth(): void {
+  if (!viewRef.value) return
+  const rect = viewRef.value.getBoundingClientRect()
+  const width = rect.width
+  const contentWidth = width - 2 * SPACE_HORIZONTAL.value
+  colWidth.value = Math.floor(
+    (contentWidth - (rowCount.value - 1) * SPACE_HORIZONTAL.value) / rowCount.value,
+  )
+  splitData()
+}
 
-        this.ColHeightList[mixIndex] += height + this.SPACE_VERTICAL;
-        this.LoopResultRes[mixIndex].push({
-          viewH: height,
-          pic: item.pic,
-          path: item.path,
-        });
-      });
-    },
-    async delImgHandle({ path, viewH }, i, index) {
-      // 删除图片
-      const deleteUrl = DeleteImage.replace('@GetRandomAPI', this.randomAPI);
-      const [err, res] = await to(
-        axios({
-          method: "get",
-          url: deleteUrl,
-          params: { path },
-        })
-      );
-      if (err) {
-        window.$message.error(err);
-        return false;
-      }
-      const { success, msg } = res.data;
-      if (!success) {
-        window.$message.error(msg);
-        return false;
-      }
-      window.$message.success(`图片已成功从磁盘删除`);
-      setTimeout(() => {
-        this.DelList.push(path);
-        sessionStorage.setItem("DelList", JSON.stringify(this.DelList));
-        this.ColHeightList[i] -= viewH - this.SPACE_VERTICAL;
-        // 删除图片后减少总数
-        this.ALLCOUNT--;
-      }, 300);
-    },
-  },
-};
+function getViewWidth(): void {
+  if (rowCount.value) {
+    setElsWidth()
+    return
+  }
+  const width = viewRef.value?.clientWidth ?? 0
+  rowCount.value = width <= 800 ? 2 : Math.floor(width / 800) * 2
+  setElsWidth()
+}
+
+function splitData(): void {
+  colHeightList.value = Array<number>(rowCount.value).fill(SPACE_VERTICAL.value)
+  loopResultRes.value = Array.from({ length: rowCount.value }, () => [] as ViewItem[])
+  if (!loopResult.value.length) return
+
+  loopResult.value.forEach((item) => {
+    const minIdx = getMinIndex(colHeightList.value)
+    const height = Math.floor((colWidth.value * item.picH) / item.picW)
+    colHeightList.value[minIdx] += height + SPACE_VERTICAL.value
+    loopResultRes.value[minIdx].push({
+      viewH: height,
+      pic: item.pic,
+      path: item.path,
+    })
+  })
+}
+
+async function delImgHandle(item: ViewItem, colIndex: number): Promise<void> {
+  const deleteUrl = DeleteImage.replace('@GetRandomAPI', randomAPI.value)
+  const [err, res] = await to(
+    axios.get<{ success: boolean; msg: string }>(deleteUrl, { params: { path: item.path } }),
+  )
+  if (err || !res) {
+    window.$message.error(String(err))
+    return
+  }
+  const { success, msg } = res.data
+  if (!success) {
+    window.$message.error(msg)
+    return
+  }
+  window.$message.success('图片已成功从磁盘删除')
+  setTimeout(() => {
+    delList.value.push(item.path)
+    sessionStorage.setItem('DelList', JSON.stringify(delList.value))
+    colHeightList.value[colIndex] -= item.viewH - SPACE_VERTICAL.value
+    allCount.value--
+  }, 300)
+}
+
+// ── 生命周期 ──────────────────────────────────────────
+onMounted(async () => {
+  // 打赏状态
+  if (localStorage.getItem('IsShowPay')) {
+    isShowPay.value = false
+  }
+  // 已删除列表
+  const savedDelList = sessionStorage.getItem('DelList')
+  if (savedDelList) {
+    delList.value = JSON.parse(savedDelList) as string[]
+  }
+  viewWidth.value = viewRef.value?.clientWidth ?? 0
+
+  // 读取本地配置
+  const cfg = localStorage.getItem('cfg')
+  if (cfg) {
+    const parsed = JSON.parse(cfg) as Settings
+    Object.assign(oldSet, parsed)
+    rowCount.value = Number(parsed.rowCount)
+    SPACE_VERTICAL.value = Number(parsed.SPACE_VERTICAL)
+    SPACE_HORIZONTAL.value = Number(parsed.SPACE_HORIZONTAL)
+    randomImg.value = parsed.randomImg
+    delImg.value = parsed.delImg
+  }
+
+  // 获取 randomAPI
+  try {
+    const response = await fetch(GetRandomAPI)
+    const data: { randomAPI: string } = await response.json()
+    randomAPI.value = data.randomAPI
+  } catch (error) {
+    console.error('获取randomAPI失败:', error)
+    window.$message.error('无法连接到服务器，请确保服务已启动')
+    return
+  }
+
+  await search()
+  getViewWidth()
+  window.addEventListener('resize', resizePage)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('resize', resizePage)
+  if (timerID.value) clearTimeout(timerID.value)
+})
 </script>
+
 <style>
 :root {
   --search-input-bg-color: #fff;
@@ -340,8 +348,8 @@ export default {
   --block-title-des-color: #716969;
 }
 </style>
+
 <style lang="less" scoped>
-/* 整体页面容器样式 */
 .wrap {
   background-color: var(--bg-color);
   width: 100%;
@@ -359,7 +367,6 @@ export default {
     background-color: var(--block-bg-color);
     box-shadow: var(--block-box-shadow);
     position: relative;
-    // border-radius: 12px;
     .del-img {
       display: none;
       position: absolute;

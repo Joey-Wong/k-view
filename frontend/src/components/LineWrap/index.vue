@@ -5,20 +5,17 @@
   </div>
 </template>
 
-<script>
-export default {
-  name: "LineWrap",
-  props: {
-    title: {
-      default: "",
-      type: String,
-    },
-    noMarginBottom: {
-      default: false,
-      type: Boolean,
-    },
-  },
-};
+<script setup lang="ts">
+withDefaults(
+  defineProps<{
+    title?: string
+    noMarginBottom?: boolean
+  }>(),
+  {
+    title: '',
+    noMarginBottom: false,
+  }
+)
 </script>
 
 <style lang="less" scoped>

@@ -1,47 +1,35 @@
 <template>
   <div :class="['row-wrap', noMarginBottom ? 'margin-bottom-2px' : 'margin-bottom-16px']">
     <span>{{ title }}</span>
-    <n-button :disabled="disabled" @click="onClick()" :type="type">
+    <n-button :disabled="disabled" :type="type" @click="emit('onClick')">
       {{ text }}
     </n-button>
   </div>
 </template>
 
-<script>
-import { NButton } from "naive-ui";
-export default {
-  name: "BtnLine",
-  components: {
-    NButton,
-  },
-  props: {
-    title: {
-      default: "",
-      type: String,
-    },
-    text: {
-      default: "",
-      type: String,
-    },
-    disabled: {
-      default: false,
-      type: Boolean,
-    },
-    type: {
-      default: "",
-      type: String,
-    },
-    noMarginBottom: {
-      default: false,
-      type: Boolean,
-    },
-  },
-  methods: {
-    onClick() {
-      this.$emit("onClick");
-    },
-  },
-};
+<script setup lang="ts">
+import { NButton, type ButtonType } from 'naive-ui'
+
+withDefaults(
+  defineProps<{
+    title?: string
+    text?: string
+    disabled?: boolean
+    type?: ButtonType
+    noMarginBottom?: boolean
+  }>(),
+  {
+    title: '',
+    text: '',
+    disabled: false,
+    type: 'default',
+    noMarginBottom: false,
+  }
+)
+
+const emit = defineEmits<{
+  (e: 'onClick'): void
+}>()
 </script>
 
 <style lang="less" scoped>
